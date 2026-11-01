@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نور قرآن - اپلیکیشن جامع قرآن کریم</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts for Scheherazade New & Vazirmatn -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Scheherazade+New:wght@400;700&family=Vazirmatn:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        emerald: {
+                            850: '#064e3b',
+                            950: '#022c22',
+                        },
+                        amber: {
+                            450: '#f59e0b',
+                        }
+                    },
+                    fontFamily: {
+                        quran: ['"Scheherazade New"', 'Amiri', 'serif'],
+                        sans: ['Vazirmatn', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar for Quran text container */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(16, 185, 129, 0.3);
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(16, 185, 129, 0.6);
+        }
+        
+        /* Smooth scrolling container behavior */
+        .quran-container {
+            scroll-behavior: smooth;
+        }
+
+        /* Quran Verse Active Glowing Animation */
+        @keyframes versePulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+            }
+        }
+
+        .active-verse-card {
+            border-color: #10b981 !important;
+            background-color: rgba(236, 253, 245, 0.85) !important;
+            transform: scale(1.01);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: versePulse 2s infinite;
+        }
+
+        .dark .active-verse-card {
+            background-color: rgba(6, 78, 59, 0.4) !important;
+            border-color: #34d399 !important;
+        }
+
+        /* Number Ornament */
+        .verse-badge {
+            background: radial-gradient(circle, #059669 0%, #047857 100%);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans h-full flex flex-col overflow-hidden" 
+      x-data="quranApp()" 
+      x-init="initApp()">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-emerald-800 dark:bg-emerald-950 text-white shadow-md z-30 shrink-0 border-b border-emerald-700/50">
+        <div class="max-w-7xl mx-auto px-4 py-2.5 flex items-center justify-between gap-2">
+            
+            <!-- Left: Sidebar Toggle & App Title -->
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <button @click="sidebarOpen = !sidebarOpen" class="p-2 rounded-lg hover:bg-emerald-700/50 transition-colors" title="منوی سوره‌ها">
+                    <i data-lucide="menu" class="w-6 h-6"></i>
+                </button>
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-full bg-amber-400 text-emerald-950 flex items-center justify-center font-bold text-lg shadow-sm">
+                        📖
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold leading-tight">نور قرآن</h1>
+                        <p class="text-xs text-emerald-200 hidden sm:block">قرآن کریم با ترجمه و صوت همگام</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Middle: Quick Controls (Page Jump & Surah Select) -->
+            <div class="flex items-center gap-2">
+                <!-- Quick Page Jump Button -->
+                <button @click="showPageModal = true" class="px-3 py-1.5 bg-emerald-700/60 hover:bg-emerald-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 border border-emerald-600/40">
+                    <i data-lucide="book-open" class="w-4 h-4 text-amber-300"></i>
+                    <span>صفحه <span x-text="currentPage"></span></span>
+                </button>
+
+                <!-- Search Button -->
+                <button @click="showSearchModal = true" class="p-2 bg-emerald-700/60 hover:bg-emerald-700 rounded-lg text-xs font-semibold flex items-center gap-1 border border-emerald-600/40" title="جستجو">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                    <span class="hidden md:inline">جستجو</span>
+                </button>
+            </div>
+
+            <!-- Right: Settings & Reciter Select -->
+            <div class="flex items-center gap-2">
+                <select x-model="selectedReciter" @change="changeReciter()" class="bg-emerald-900 border border-emerald-600/50 text-white text-xs rounded-lg p-1.5 focus:ring-1 focus:ring-amber-400 focus:outline-none">
+                    <template x-for="r in reciters" :key="r.id">
+                        <option :value="r.id" x-text="r.name"></option>
+                    </template>
+                </select>
+
+                <button @click="toggleAutoScroll()" :class="autoScroll ? 'bg-amber-500 text-slate-900' : 'bg-emerald-700/60 text-white'" class="p-2 rounded-lg text-xs flex items-center gap-1 border border-emerald-600/40 transition-all" title="اسکرول خودکار هوشمند">
+                    <i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- Sidebar Drawer (114 Surahs List) -->
+        <aside x-show="sidebarOpen" 
+               x-transition:enter="transition ease-out duration-300 transform"
+               x-transition:enter-start="translate-x-full"
+               x-transition:enter-end="translate-x-0"
+               x-transition:leave="transition ease-in duration-200 transform"
+               x-transition:leave-start="translate-x-0"
+               x-transition:leave-end="translate-x-full"
+               class="absolute inset-y-0 right-0 z-40 w-80 bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 flex flex-col">
+            
+            <!-- Sidebar Header -->
+            <div class="p-4 bg-emerald-800 text-white flex items-center justify-between">
+                <h2 class="font-bold text-base flex items-center gap-2">
+                    <i data-lucide="list" class="w-5 h-5"></i>
+                    <span>فهرست سوره‌ها (۱۱۴)</span>
+                </h2>
+                <button @click="sidebarOpen = false" class="p-1 rounded-lg hover:bg-emerald-700">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Surah Search Filter -->
+            <div class="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850">
+                <div class="relative">
+                    <input type="text" x-model="surahFilter" placeholder="جستجوی نام سوره..." class="w-full pl-3 pr-9 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <i data-lucide="search" class="w-4 h-4 absolute right-3 top-2.5 text-slate-400"></i>
+                </div>
+            </div>
+
+            <!-- Surahs List -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                <template x-for="surah in filteredSurahs" :key="surah.number">
+                    <button @click="loadSurah(surah.number); sidebarOpen = false;" 
+                            :class="currentSurah?.number === surah.number ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-500 text-emerald-800 dark:text-emerald-300 font-bold' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-transparent'"
+                            class="w-full text-right p-2.5 rounded-xl border flex items-center justify-between transition-all group">
+                        
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 font-semibold text-xs flex items-center justify-center border border-emerald-200 dark:border-emerald-800"
+                                 x-text="surah.number">
+                            </div>
+                            <div>
+                                <div class="text-sm font-bold" x-text="surah.name"></div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400" x-text="surah.englishNameTranslation + ' • ' + surah.numberOfAyahs + ' آیه'"></div>
+                            </div>
+                        </div>
+
+                        <div class="text-left">
+                            <span class="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700" x-text="surah.revelationType === 'Meccan' ? 'مکی' : 'مدنی'"></span>
+                            <div class="text-[10px] text-slate-400 mt-1" x-text="'صفحه ' + surah.page"></div>
+                        </div>
+                    </button>
+                </template>
+            </div>
+        </aside>
+
+        <!-- Main Quran Reading Panel -->
+        <main class="flex-1 flex flex-col h-full overflow-hidden bg-amber-50/20 dark:bg-slate-950">
+            
+            <!-- Top Active Surah Info Banner -->
+            <div class="bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-6 py-3 flex items-center justify-between shrink-0 shadow-sm">
+                <div>
+                    <h2 class="text-lg font-bold text-emerald-900 dark:text-emerald-400 flex items-center gap-2">
+                        <span x-text="currentSurah?.name || 'در حال بارگذاری...'"></span>
+                        <span class="text-xs font-normal text-slate-500 dark:text-slate-400" x-text="currentSurah ? '(' + currentSurah.englishName + ')' : ''"></span>
+                    </h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" x-text="currentSurah ? 'سوره ' + currentSurah.number + ' • ' + (currentSurah.revelationType === 'Meccan' ? 'مکی' : 'مدنی') + ' • ' + currentSurah.numberOfAyahs + ' آیه' : ''"></p>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <button @click="fontSize = Math.min(fontSize + 2, 40)" class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-bold" title="افزایش اندازه قلم">الف+</button>
+                    <button @click="fontSize = Math.max(fontSize - 2, 18)" class="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-bold" title="کاهش اندازه قلم">الف-</button>
+                    <button @click="showTranslation = !showTranslation" :class="showTranslation ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors">
+                        ترجمه
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quran Verses Container (Smooth Auto-scroll target) -->
+            <div id="quranContainer" class="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 space-y-6 quran-container">
+                
+                <!-- Bismillah Banner (Except Surah At-Tawbah) -->
+                <template x-if="currentSurah && currentSurah.number !== 9 && currentSurah.number !== 1">
+                    <div class="text-center py-6 my-2 text-2xl md:text-3xl font-quran text-emerald-800 dark:text-emerald-400">
+                        بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
+                    </div>
+                </template>
+
+                <!-- Loading State -->
+                <div x-show="loading" class="flex flex-col items-center justify-center py-20 text-slate-400">
+                    <div class="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                    <p class="text-sm">در حال دریافت آیات و صوت قرآن کریم...</p>
+                </div>
+
+                <!-- Ayahs List -->
+                <template x-for="(ayah, index) in ayahs" :key="ayah.number">
+                    <div :id="'verse-' + ayah.numberInSurah" 
+                         :class="currentPlayingAyah === ayah.numberInSurah ? 'active-verse-card' : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800/80 hover:border-emerald-300 dark:hover:border-emerald-800'"
+                         class="p-5 md:p-6 rounded-2xl border shadow-sm transition-all duration-300 relative group">
+                        
+                        <!-- Ayah Header Controls -->
+                        <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800/60">
+                            <!-- Ayah Number Ornament -->
+                            <div class="flex items-center gap-2">
+                                <div class="verse-badge text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-sm"
+                                     x-text="ayah.numberInSurah">
+                                </div>
+                                <span class="text-xs text-slate-400" x-text="'آیه ' + ayah.numberInSurah"></span>
+                            </div>
+
+                            <!-- Play Ayah Button -->
+                            <div class="flex items-center gap-2">
+                                <button @click="playSingleAyah(ayah.numberInSurah)" 
+                                        :class="currentPlayingAyah === ayah.numberInSurah && isPlaying ? 'bg-amber-500 text-slate-900' : 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100'"
+                                        class="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors">
+                                    <i :data-lucide="currentPlayingAyah === ayah.numberInSurah && isPlaying ? 'pause' : 'play'" class="w-3.5 h-3.5"></i>
+                                    <span x-text="currentPlayingAyah === ayah.numberInSurah && isPlaying ? 'توقف' : 'پخش آیه'"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Quran Arabic Text -->
+                        <div class="text-right font-quran leading-[2.4] text-slate-900 dark:text-slate-50 tracking-wide mb-3 px-2 select-text"
+                             :style="'font-size: ' + fontSize + 'px;'"
+                             x-text="ayah.text">
+                        </div>
+
+                        <!-- Persian Translation Text -->
+                        <div x-show="showTranslation" 
+                             x-transition
+                             class="text-right text-slate-600 dark:text-slate-300 text-sm md:text-base font-normal leading-relaxed pt-3 border-t border-dashed border-slate-100 dark:border-slate-800/80 px-2"
+                             x-text="ayah.translation">
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </main>
+    </div>
+
+    <!-- Bottom Audio Controller Bar -->
+    <footer class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-3 md:p-4 z-30 shadow-lg shrink-0">
+        <div class="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+            
+            <!-- Now Playing Ayah Info -->
+            <div class="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-md">
+                        <i data-lucide="music" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-bold text-slate-800 dark:text-slate-100" x-text="currentSurah ? currentSurah.name + ' - آیه ' + currentPlayingAyah : 'آماده پخش'"></div>
+                        <div class="text-xs text-slate-400" x-text="getSelectedReciterName()"></div>
+                    </div>
+                </div>
+
+                <!-- Auto-Scroll Indicator -->
+                <div class="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span>اسکرول هوشمند فعال</span>
+                </div>
+            </div>
+
+            <!-- Player Center Controls -->
+            <div class="flex items-center gap-3 w-full md:w-auto justify-center">
+                <button @click="playPreviousAyah()" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300" title="آیه قبلی">
+                    <i data-lucide="skip-forward" class="w-5 h-5"></i>
+                </button>
+
+                <button @click="togglePlay()" class="w-12 h-12 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shadow-lg transition-transform active:scale-95">
+                    <i :data-lucide="isPlaying ? 'pause' : 'play'" class="w-6 h-6 ml-0.5"></i>
+                </button>
+
+                <button @click="playNextAyah()" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300" title="آیه بعدی">
+                    <i data-lucide="skip-back" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Speed & Volume Controls -->
+            <div class="flex items-center gap-3 w-full md:w-auto justify-end text-xs">
+                <span class="text-slate-400">سرعت:</span>
+                <select x-model="playbackSpeed" @change="updatePlaybackSpeed()" class="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg px-2 py-1 border border-slate-200 dark:border-slate-700 focus:outline-none">
+                    <option value="0.75">0.75x</option>
+                    <option value="1">1.0x (عادی)</option>
+                    <option value="1.25">1.25x</option>
+                    <option value="1.5">1.5x</option>
+                </select>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Modal: Jump to Page -->
+    <div x-show="showPageModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" style="display: none;">
+        <div @click.away="showPageModal = false" class="bg-white dark:bg-slate-900 rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+                <i data-lucide="book-open" class="w-5 h-5 text-emerald-600"></i>
+                <span>پرش به صفحه قرآن</span>
+            </h3>
+            <p class="text-xs text-slate-500 mb-4">شماره صفحه مورد نظر (۱ تا ۶۰۴) را وارد کنید:</p>
+
+            <input type="number" min="1" max="604" x-model="targetPageInput" class="w-full text-center text-xl font-bold p-3 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 focus:ring-2 focus:ring-emerald-500 focus:outline-none mb-4">
+
+            <div class="flex gap-2">
+                <button @click="jumpToPage()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm">تایید و پرش</button>
+                <button @click="showPageModal = false" class="px-4 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-sm">انصراف</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Search Quran -->
+    <div x-show="showSearchModal" x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" style="display: none;">
+        <div @click.away="showSearchModal = false" class="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[80vh]">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-4">
+                <h3 class="text-lg font-bold flex items-center gap-2">
+                    <i data-lucide="search" class="w-5 h-5 text-emerald-600"></i>
+                    <span>جستجو در قرآن و ترجمه</span>
+                </h3>
+                <button @click="showSearchModal = false" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="flex gap-2 mb-4">
+                <input type="text" x-model="searchQuery" @keyup.enter="performSearch()" placeholder="کلمه یا عبارت مورد نظر را وارد کنید..." class="flex-1 px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm">
+                <button @click="performSearch()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm flex items-center gap-1">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                    <span>جستجو</span>
+                </button>
+            </div>
+
+            <!-- Search Results List -->
+            <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 p-1">
+                <div x-show="isSearching" class="text-center py-8 text-slate-400 text-sm">در حال جستجو...</div>
+                
+                <template x-for="result in searchResults" :key="result.surah + '-' + result.ayah">
+                    <div @click="loadSurah(result.surah, result.ayah); showSearchModal = false;" class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 hover:border-emerald-500 cursor-pointer transition-all">
+                        <div class="flex items-center justify-between mb-1 text-xs text-emerald-700 dark:text-emerald-400 font-bold">
+                            <span x-text="'سوره ' + result.surahName + ' - آیه ' + result.ayah"></span>
+                            <span x-text="'صفحه ' + result.page"></span>
+                        </div>
+                        <div class="text-sm font-quran text-slate-800 dark:text-slate-200 mb-1" x-text="result.text"></div>
+                        <div class="text-xs text-slate-500 dark:text-slate-400" x-text="result.translation"></div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden HTML5 Audio Element -->
+    <audio id="quranAudio" class="hidden"></audio>
+
+    <!-- Application JavaScript Logic -->
+    <script>
+        function quranApp() {
+            return {
+                sidebarOpen: false,
+                showPageModal: false,
+                showSearchModal: false,
+                autoScroll: true,
+                fontSize: 26,
+                showTranslation: true,
+                loading: false,
+                
+                // Data States
+                surahs: [],
+                filteredSurahs: [],
+                surahFilter: '',
+                currentSurah: null,
+                ayahs: [],
+                currentPage: 1,
+                targetPageInput: 1,
+
+                // Audio Player States
+                audio: null,
+                isPlaying: false,
+                currentPlayingAyah: 1,
+                playbackSpeed: 1,
+                selectedReciter: 'ar.alafasy',
+                
+                reciters: [
+                    { id: 'ar.alafasy', name: 'مشاری راشد العفاسی' },
+                    { id: 'ar.abdulbasitmurattal', name: 'عبدالباسط عبدالصمد' },
+                    { id: 'ar.minshawi', name: 'محمد صدیق المنشاوی' },
+                    { id: 'ar.parhizgar', name: 'شهریار پرهیزگار' },
+                    { id: 'ar.husary', name: 'محمود خلیل الحصری' }
+                ],
+
+                // Search States
+                searchQuery: '',
+                searchResults: [],
+                isSearching: false,
+
+                initApp() {
+                    this.audio = document.getElementById('quranAudio');
+                    this.setupAudioEvents();
+                    this.fetchSurahsList();
+
+                    this.$watch('surahFilter', (val) => {
+                        this.filteredSurahs = this.surahs.filter(s => 
+                            s.name.includes(val) || 
+                            s.englishName.toLowerCase().includes(val.toLowerCase()) ||
+                            s.number.toString() === val
+                        );
+                    });
+
+                    // Refresh Lucide Icons on DOM render
+                    this.$nextTick(() => {
+                        lucide.createIcons();
+                    });
+                },
+
+                // Fetch 114 Surahs Metadata
+                async fetchSurahsList() {
+                    try {
+                        const response = await fetch('https://api.alquran.cloud/v1/surah');
+                        const data = await response.json();
+                        if (data.code === 200) {
+                            this.surahs = data.data;
+                            this.filteredSurahs = this.surahs;
+                            // Load Default Surah (Fatiha or Yasin)
+                            this.loadSurah(1);
+                        }
+                    } catch (error) {
+                        console.error("خطا در دریافت فهرست سوره‌ها:", error);
+                    }
+                },
+
+                // Load Full Surah (Text + Translation + Audio URLs)
+                async loadSurah(surahNumber, targetAyah = 1) {
+                    this.loading = true;
+                    this.isPlaying = false;
+                    if (this.audio) this.audio.pause();
+
+                    try {
+                        // Fetch Quran Text & Persian Translation
+                        const [arabicRes, transRes] = await Promise.all([
+                            fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}`),
+                            fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}/fa.makarem`)
+                        ]);
+
+                        const arabicData = await arabicRes.json();
+                        const transData = await transRes.json();
+
+                        if (arabicData.code === 200 && transData.code === 200) {
+                            this.currentSurah = arabicData.data;
+                            this.currentPage = arabicData.data.ayahs[0].page;
+
+                            // Combine Text and Translation
+                            this.ayahs = arabicData.data.ayahs.map((ayah, index) => ({
+                                number: ayah.number,
+                                numberInSurah: ayah.numberInSurah,
+                                text: ayah.text,
+                                translation: transData.data.ayahs[index].text,
+                                page: ayah.page
+                            }));
+
+                            this.currentPlayingAyah = targetAyah;
+
+                            this.$nextTick(() => {
+                                lucide.createIcons();
+                                this.scrollToAyah(targetAyah, 'smooth');
+                            });
+                        }
+                    } catch (error) {
+                        console.error("خطا در دریافت آیات سوره:", error);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                // Core Feature: Smooth Animated Auto-Scroll to Playing Ayah
+                scrollToAyah(ayahNumber, behavior = 'smooth') {
+                    if (!this.autoScroll) return;
+
+                    const element = document.getElementById(`verse-${ayahNumber}`);
+                    const container = document.getElementById('quranContainer');
+
+                    if (element && container) {
+                        // Calculate middle offset
+                        const containerHeight = container.clientHeight;
+                        const elementTop = element.offsetTop;
+                        const elementHeight = element.offsetHeight;
+                        
+                        // Center the target verse in view
+                        const scrollToPosition = elementTop - (containerHeight / 2) + (elementHeight / 2);
+
+                        container.scrollTo({
+                            top: scrollToPosition,
+                            behavior: behavior
+                        });
+                    }
+                },
+
+                // Audio Playing Logic
+                setupAudioEvents() {
+                    this.audio.addEventListener('ended', () => {
+                        if (this.currentPlayingAyah < this.ayahs.length) {
+                            this.currentPlayingAyah++;
+                            this.playAudioForCurrentAyah();
+                        } else {
+                            this.isPlaying = false;
+                        }
+                    });
+
+                    this.audio.addEventListener('play', () => {
+                        this.isPlaying = true;
+                    });
+
+                    this.audio.addEventListener('pause', () => {
+                        this.isPlaying = false;
+                    });
+                },
+
+                playAudioForCurrentAyah() {
+                    // Generate Everywhere API Audio URL for specific Reciter, Surah & Ayah
+                    const surahPadded = String(this.currentSurah.number).padStart(3, '0');
+                    const ayahPadded = String(this.currentPlayingAyah).padStart(3, '0');
+                    
+                    // Audio source format using EveryAyah CDN
+                    const reciterFolder = this.getReciterFolder(this.selectedReciter);
+                    const audioUrl = `https://everyayah.com/data/${reciterFolder}/${surahPadded}${ayahPadded}.mp3`;
+
+                    this.audio.src = audioUrl;
+                    this.audio.playbackRate = this.playbackSpeed;
+                    this.audio.play().catch(e => console.error("Audio playback error:", e));
+
+                    // Trigger Smooth Auto-scroll & Highlight animation
+                    this.scrollToAyah(this.currentPlayingAyah, 'smooth');
+                },
+
+                togglePlay() {
+                    if (this.isPlaying) {
+                        this.audio.pause();
+                    } else {
+                        if (!this.audio.src || this.audio.src === '') {
+                            this.playAudioForCurrentAyah();
+                        } else {
+                            this.audio.play();
+                        }
+                    }
+                },
+
+                playSingleAyah(ayahNumber) {
+                    if (this.currentPlayingAyah === ayahNumber && this.isPlaying) {
+                        this.audio.pause();
+                    } else {
+                        this.currentPlayingAyah = ayahNumber;
+                        this.playAudioForCurrentAyah();
+                    }
+                },
+
+                playNextAyah() {
+                    if (this.currentPlayingAyah < this.ayahs.length) {
+                        this.currentPlayingAyah++;
+                        this.playAudioForCurrentAyah();
+                    }
+                },
+
+                playPreviousAyah() {
+                    if (this.currentPlayingAyah > 1) {
+                        this.currentPlayingAyah--;
+                        this.playAudioForCurrentAyah();
+                    }
+                },
+
+                changeReciter() {
+                    if (this.isPlaying) {
+                        this.playAudioForCurrentAyah();
+                    }
+                },
+
+                updatePlaybackSpeed() {
+                    if (this.audio) {
+                        this.audio.playbackRate = this.playbackSpeed;
+                    }
+                },
+
+                toggleAutoScroll() {
+                    this.autoScroll = !this.autoScroll;
+                    if (this.autoScroll) {
+                        this.scrollToAyah(this.currentPlayingAyah, 'smooth');
+                    }
+                },
+
+                // Jump directly to Quran Page (1 to 604)
+                async jumpToPage() {
+                    const pageNum = parseInt(this.targetPageInput);
+                    if (pageNum >= 1 && pageNum <= 604) {
+                        try {
+                            const res = await fetch(`https://api.alquran.cloud/v1/page/${pageNum}/quran-uthmani`);
+                            const data = await res.json();
+                            if (data.code === 200 && data.data.ayahs.length > 0) {
+                                const firstAyah = data.data.ayahs[0];
+                                this.showPageModal = false;
+                                await this.loadSurah(firstAyah.surah.number, firstAyah.numberInSurah);
+                            }
+                        } catch (err) {
+                            console.error("خطا در پرش به صفحه:", err);
+                        }
+                    }
+                },
+
+                // Search Quran Text & Translation
+                async performSearch() {
+                    if (!this.searchQuery.trim()) return;
+                    this.isSearching = true;
+                    this.searchResults = [];
+
+                    try {
+                        const res = await fetch(`https://api.alquran.cloud/v1/search/${encodeURIComponent(this.searchQuery)}/all/fa.makarem`);
+                        const data = await res.json();
+
+                        if (data.code === 200) {
+                            this.searchResults = data.data.matches.map(m => ({
+                                surah: m.surah.number,
+                                surahName: m.surah.name,
+                                ayah: m.numberInSurah,
+                                text: m.text,
+                                translation: m.translation || '',
+                                page: m.page
+                            }));
+                        }
+                    } catch (err) {
+                        console.error("خطا در جستجو:", err);
+                    } finally {
+                        this.isSearching = false;
+                    }
+                },
+
+                getSelectedReciterName() {
+                    const r = this.reciters.find(item => item.id === this.selectedReciter);
+                    return r ? r.name : '';
+                },
+
+                getReciterFolder(reciterId) {
+                    const folders = {
+                        'ar.alafasy': 'Alafasy_128kbps',
+                        'ar.abdulbasitmurattal': 'Abdul_Basit_Murattal_192kbps',
+                        'ar.minshawi': 'Minshawy_Murattal_128kbps',
+                        'ar.parhizgar': 'Parhizgar_48kbps',
+                        'ar.husary': 'Husary_128kbps'
+                    };
+                    return folders[reciterId] || 'Alafasy_128kbps';
+                }
+            }
+        }
+    </script>
+</body>
+</html>
